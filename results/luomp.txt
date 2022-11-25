@@ -1,0 +1,16 @@
+n = 8000, thread count: 16, time: 36130.7ms
+n = 8000, thread count: 15, time: 36440.5ms
+n = 8000, thread count: 14, time: 37177.2ms
+n = 8000, thread count: 13, time: 37058ms
+n = 8000, thread count: 12, time: 38127.2ms
+n = 8000, thread count: 11, time: 38466.1ms
+n = 8000, thread count: 10, time: 41636.4ms
+n = 8000, thread count: 9, time: 39958.3ms
+n = 8000, thread count: 8, time: 42612.3ms
+n = 8000, thread count: 7, time: 41673.4ms
+n = 8000, thread count: 6, time: 47140.3ms
+n = 8000, thread count: 5, time: 47341.1ms
+n = 8000, thread count: 4, time: 55920.4ms
+n = 8000, thread count: 3, time: 72611.1ms
+n = 8000, thread count: 2, time: 95118.6ms
+n = 8000, thread count: 1, time: 198065ms

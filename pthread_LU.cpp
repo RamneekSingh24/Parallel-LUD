@@ -6,51 +6,12 @@
 #include <unistd.h>
 #include <immintrin.h>
 
-#ifndef CACHE_BLOCK_SIZE
-#define CACHE_BLOCK_SIZE 64
-#endif
+#define A(i, j) A[(i) * (n) + (j)]
+#define AA(i, j) AA[(i) * (n) + (j)]
+#define L(i, j) L[(i) * (n) + (j)]
+#define U(i, j) U[(i) * (n) + (j)]
 
-#define A(i, j) A[i * n + j]
-#define L(i, j) L[j * n + i]
-#define U(i, j) U[i * n + j]
-
-#define ABS(a) (a < 0 ? -a : a)
-
-/*
-struct T_ST
-{
-    int tid;
-    int t;
-    double *a;
-};
-
-#define SZ 2000
-
-void *test_fun(void *arg)
-{
-    T_ST *inp = (T_ST *)arg;
-    int tid = inp->tid;
-    double *a = inp->a;
-    int t = inp->t;
-    int WORK = SZ / t;
-
-    for (int k = 0; k < SZ; k++)
-    {
-        for (int i = 0; i < SZ; i++)
-        {
-            if (i % t == tid)
-            {
-                for (int j = 0; j < SZ; j++)
-                {
-                    a[i * SZ + j] -= 1.0;
-                }
-            }
-        }
-    }
-
-    return NULL;
-}
-*/
+#define ABS(a) ((a) < 0 ? -(a) : (a))
 
 void test(int n, double *A, double *L, double *U, int *P)
 {
@@ -191,43 +152,23 @@ void *LUD_parallel(void *arg)
         int ed = std::min(st + work_per_th, n);
 
         int total_cols_left = (n - k - 1);
-        int num_blocks = (total_cols_left + CACHE_BLOCK_SIZE - 1) / CACHE_BLOCK_SIZE;
 
-        // for (int block = 0; block < num_blocks; block++)
-        // {
-        //     for (int i = st; i < ed; i++)
-        //     {
-        //         int j_st = k + 1 + block * CACHE_BLOCK_SIZE;
-        //         int j_end = std::min(j_st + CACHE_BLOCK_SIZE, n);
-        //         double c = L(i, k);
-        //         for (int j = j_st; j < j_end; j++)
-        //         {
-        //             A(i, j) -= c * U(k, j);
-        //         }
-        //     }
-        // }
+#ifndef TILE_SIZE
+#define TILE_SIZE 256
+#endif
+
+        int block_size = TILE_SIZE;
+        int num_blocks = (total_cols_left + block_size - 1) / block_size;
 
         for (int block = 0; block < num_blocks; block++)
         {
             for (int i = st; i < ed; i++)
             {
-                int j_st = k + 1 + block * CACHE_BLOCK_SIZE;
-                int j_end = std::min(j_st + CACHE_BLOCK_SIZE, n);
+                int j_st = k + 1 + block * block_size;
+                int j_end = std::min(j_st + block_size, n);
                 double c = L(i, k);
-                __m256d L_v = _mm256_set1_pd(-c);
-                int j = j_st;
-                for (; j + 4 < j_end; j += 4)
-                {
-                    __m256d U_v = _mm256_loadu_pd((U + k * n + j));
-                    __m256d A_v = _mm256_loadu_pd((A + i * n + j));
 
-                    __m256d res_V = _mm256_fmadd_pd(U_v, L_v, A_v);
-                    _mm256_storeu_pd((A + i * n + j), res_V);
-
-                    // for (int kk = 0; kk < 4; kk++)
-                    //     A(i, j + kk) -= c * (U + k * n + j)[kk];
-                }
-                for (; j < j_end; j++)
+                for (int j = j_st; j < j_end; j++)
                 {
                     A(i, j) -= c * U(k, j);
                 }
@@ -319,7 +260,6 @@ void LU_Decomp(int n, int t, bool check_res)
         for (int i = 0; i < t; i++)
         {
             pthread_join(threads[i], NULL);
-            // delete inputs[i];
         }
 
         pthread_barrier_destroy(&barrier);

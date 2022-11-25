@@ -5,14 +5,9 @@
 #include <unistd.h>
 #include <omp.h>
 
-#ifndef CACHE_BLOCK_SIZE
-#define CACHE_BLOCK_SIZE 64
-#endif
-
 #define TILE_SIZE 8
 
 #define A(i, j) A[(i) * (n) + (j)]
-#define AA(i, j) AA[(i) * (n) + (j)]
 #define L(i, j) L[(j) * (n) + (i)]
 #define U(i, j) U[(i) * (n) + (j)]
 
@@ -37,8 +32,6 @@ void test(int n, double *A, double *L, double *U, int *P)
     std::cout << "L2 norm error (PA - LU): " << norm << "\n";
 }
 
-double *AA;
-
 double Linv[TILE_SIZE][TILE_SIZE];
 double Uinv[TILE_SIZE][TILE_SIZE];
 
@@ -51,8 +44,6 @@ void LUD_parallel(double *A, double *L, double *U, int *P, int n, int t)
     {
         if (omp_get_thread_num() == 0)
         {
-            // std::cout << "ola\n";
-
             // pivot all the rows that span the tiles in this iteration
             for (int k = tr; k < tr + TILE_SIZE; k++)
             {
@@ -105,14 +96,6 @@ void LUD_parallel(double *A, double *L, double *U, int *P, int n, int t)
                 }
             }
 
-            // for (int i = 0; i < TILE_SIZE; i++)
-            // {
-            //     for (int j = 0; j < TILE_SIZE; j++)
-            //     {
-            //         A(tr + i, tr + j) = AA(tr + i, tr + j);
-            //     }
-            // }
-
             // calculate their inverses
             // Hopefully everything fits in cache
             for (int i = 0; i < TILE_SIZE; i++)
@@ -137,20 +120,6 @@ void LUD_parallel(double *A, double *L, double *U, int *P, int n, int t)
                 }
             }
 
-            // for (int i = 0; i < TILE_SIZE; i++)
-            // {
-            //     for (int j = 0; j < TILE_SIZE; j++)
-            //     {
-            //         double s = 0;
-            //         for (int k = 0; k < TILE_SIZE; k++)
-            //         {
-            //             s += L(tr + i, tr + k) * Linv[k][j];
-            //         }
-            //         std::cout << s << " ";
-            //     }
-            //     std::cout << "\n";
-            // }
-
             // calculate their inverses
             // Hopefully everything fits in cache
             for (int i = 0; i < TILE_SIZE; i++)
@@ -174,20 +143,6 @@ void LUD_parallel(double *A, double *L, double *U, int *P, int n, int t)
                     Uinv[i][j] = s / U(tr + i, tr + i);
                 }
             }
-
-            // for (int i = 0; i < TILE_SIZE; i++)
-            // {
-            //     for (int j = 0; j < TILE_SIZE; j++)
-            //     {
-            //         double s = 0;
-            //         for (int k = 0; k < TILE_SIZE; k++)
-            //         {
-            //             s += U(tr + i, tr + k) * Uinv[k][j];
-            //         }
-            //         std::cout << s << " ";
-            //     }
-            //     std::cout << "\n";
-            // }
         }
 #pragma omp barrier
 
@@ -233,75 +188,6 @@ void LUD_parallel(double *A, double *L, double *U, int *P, int n, int t)
             }
         }
 
-        // for (int i = 0; i < n; i++)
-        // {
-        //     for (int j = 0; j < n; j++)
-        //     {
-        //         std::cout << L(i, j) << " ";
-        //     }
-        //     std::cout << "\n";
-        // }
-        // std::cout << "---pp-\n";
-        // for (int i = 0; i < n; i++)
-        // {
-        //     for (int j = 0; j < n; j++)
-        //     {
-        //         std::cout << U(i, j) << " ";
-        //     }
-        //     std::cout << "\n";
-        // }
-        // std::cout << "----\n";
-
-        // for (int i = 0; i < n; i++)
-        // {
-        //     for (int j = 0; j < n; j++)
-        //     {
-        //         std::cout << AA(i, j) << " ";
-        //     }
-        //     std::cout << "\n";
-        // }
-        // std::cout << "----\n";
-
-        // for (int i = 0; i < TILE_SIZE; i++)
-        // {
-        //     for (int j = 0; j < TILE_SIZE; j++)
-        //     {
-        //         std::cout << Linv[i][j] << " ";
-        //     }
-        //     std::cout << "\n";
-        // }
-        // std::cout << "----\n";
-
-        // for (int i = 0; i < TILE_SIZE; i++)
-        // {
-        //     for (int j = 0; j < TILE_SIZE; j++)
-        //     {
-        //         std::cout << Uinv[i][j] << " ";
-        //     }
-        //     std::cout << "\n";
-        // }
-        // std::cout << "----\n";
-
-        // std::cout << "printing diff\n";
-        // for (int i = 0; i < n; i++)
-        // {
-        //     for (int j = 0; j < n; j++)
-        //     {
-        //         double s = 0.0;
-        //         for (int k = 0; k < n; k++)
-        //         {
-        //             s += L(i, k) * U(k, j);
-        //         }
-        //         double a = AA(P[i], j);
-        //         // norm += (a - s) * (a - s);
-        //         std::cout << ABS(a - s) << " ";
-        //     }
-        //     std::cout << "\n";
-        // }
-        // std::cout << "----\n";
-
-        // std::cout << "(" << rb << ", " << cb << "): " << norm << "\n";
-
 #pragma omp for collapse(2)
         for (int tbr = bb; tbr < n; tbr += TILE_SIZE)
         {
@@ -315,26 +201,12 @@ void LUD_parallel(double *A, double *L, double *U, int *P, int n, int t)
                         for (int k = 0; k < TILE_SIZE; k++)
                         {
                             s += L(tbr + i, tr + k) * U(tr + k, tbc + j);
-                            // std::cout << "yoypppoyo " << A(1, 1) << " " << s << " " << L(tbr + i, tr + k) << " " << U(tr + k, tbc + j) << "\n";
                         }
-                        // std::cout << "yoyoyo " << A(1, 1) << " " << s << "\n";
                         A(tbr + i, tbc + j) -= s;
                     }
                 }
             }
         }
-
-        // std::cout << "-printing A-\n";
-
-        // for (int i = 0; i < n; i++)
-        // {
-        //     for (int j = 0; j < n; j++)
-        //     {
-        //         std::cout << A(i, j) << " ";
-        //     }
-        //     std::cout << "\n";
-        // }
-        // std::cout << "----\n";
     }
 }
 
@@ -355,8 +227,7 @@ void LU_Decomp(int n, int t, bool check_res)
 
     std::uniform_real_distribution<double> unif(lower_bound, upper_bound);
     std::default_random_engine re;
-    // re.seed(time(0)); // TODO: fix seed
-    re.seed(13);
+    re.seed(time(0));
     n = round_up_to_next_p2(n);
 
     double *A = new double[n * n];
@@ -392,8 +263,6 @@ void LU_Decomp(int n, int t, bool check_res)
             }
         }
     }
-
-    AA = A;
 
     double *A_ = new double[n * n];
     memcpy(A_, A, sizeof(double) * n * n);

@@ -3,16 +3,16 @@
 #include <iostream>
 #include <chrono>
 #include <unistd.h>
+#include <omp.h>
 
-#ifndef CACHE_BLOCK_SIZE
-#define CACHE_BLOCK_SIZE 64
-#endif
+#define TILE_SIZE 256
 
-#define A(i, j) A[i * n + j]
-#define L(i, j) L[j * n + i]
-#define U(i, j) U[i * n + j]
+#define A(i, j) A[(i) * (n) + (j)]
+#define AA(i, j) AA[(i) * (n) + (j)]
+#define L(i, j) L[(i) * (n) + (j)]
+#define U(i, j) U[(i) * (n) + (j)]
 
-#define ABS(a) (a < 0 ? -a : a)
+#define ABS(a) ((a) < 0 ? -(a) : (a))
 
 void test(int n, double *A, double *L, double *U, int *P)
 {
@@ -95,7 +95,7 @@ void LUD_parallel(void *arg)
 {
     LUDInput *input = (LUDInput *)arg;
     int n = input->n;
-    int t = input->t;
+    int thread_count = input->t;
     double *A = input->A;
     double *L = input->L;
     double *U = input->U;
@@ -104,53 +104,58 @@ void LUD_parallel(void *arg)
 #pragma omp parallel num_threads(thread_count)
     for (int k = 0; k < n; k++)
     {
-        double max = 0.0;
-        int k_ = -1;
-
-        for (int i = k; i < n; i++)
+        if (omp_get_thread_num() == 0)
         {
-            if (max < ABS(A(i, k)))
+            double max = 0.0;
+            int k_ = -1;
+
+            for (int i = k; i < n; i++)
             {
-                max = ABS(A(i, k));
-                k_ = i;
+                if (max < ABS(A(i, k)))
+                {
+                    max = ABS(A(i, k));
+                    k_ = i;
+                }
+            }
+
+            if (k_ == -1)
+            {
+                std::cout << "invalid argument(singular matrix)\n";
+                exit(0);
+            }
+
+            std::swap(P[k], P[k_]);
+            for (int i = 0; i < n; i++)
+            {
+                std::swap(A(k, i), A(k_, i));
+            }
+            for (int i = 0; i < k; i++)
+            {
+                std::swap(L(k, i), L(k_, i));
+            }
+            U(k, k) = A(k, k);
+            for (int i = k + 1; i < n; i++)
+            {
+                L(i, k) = A(i, k) / U(k, k);
+                U(k, i) = A(k, i);
             }
         }
 
-        if (k_ == -1)
-        {
-            std::cout << "invalid argument(singular matrix)\n";
-            exit(0);
-        }
-
-        std::swap(P[k], P[k_]);
-        for (int i = 0; i < n; i++)
-        {
-            std::swap(A(k, i), A(k_, i));
-        }
-        for (int i = 0; i < k; i++)
-        {
-            std::swap(L(k, i), L(k_, i));
-        }
-        U(k, k) = A(k, k);
-        for (int i = k + 1; i < n; i++)
-        {
-            L(i, k) = A(i, k) / U(k, k);
-            U(k, i) = A(k, i);
-        }
+#pragma omp barrier
 
         int total_cols_left = (n - k - 1);
-        int num_blocks = (total_cols_left + CACHE_BLOCK_SIZE - 1) / CACHE_BLOCK_SIZE;
+        int num_blocks = (total_cols_left + TILE_SIZE - 1) / TILE_SIZE;
 
 #pragma omp for
         for (int i = k + 1; i < n; i++)
         {
             for (int block = 0; block < num_blocks; block++)
             {
-                int j_st = k + 1 + block * CACHE_BLOCK_SIZE;
-                int j_end = std::min(j_st + CACHE_BLOCK_SIZE, n);
+                int j_st = k + 1 + block * TILE_SIZE;
+                int j_end = std::min(j_st + TILE_SIZE, n);
                 double c = L(i, k);
                 double *__restrict__ Arow = &A[i * n];
-                double *__restrict__ Urow = &U[i * n];
+                double *__restrict__ Urow = &U[k * n];
 
 #pragma omp simd uniform(Arow, Urow) linear(j : 1)
                 for (int j = j_st; j < j_end; j++)

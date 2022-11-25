@@ -1,18 +1,16 @@
-CC := /opt/homebrew/Cellar/gcc/12.2.0/bin/g++-12
-
-all: pthread openmp
+all: pthread openmp openmp_b
 
 pthread:
-	$(CC) -std=c++11 -march=native pthread_LU.cpp -g -lpthread -O3 -ftree-vectorizer-verbose=1 -DCACHE_BLOCK_SIZE=$$(cat /proc/cpuinfo | grep cache_alignment | head -1 |sed 's/^.*: //') -o lupt
+	g++ -std=c++11 -march=native pthread_LU.cpp -g -lpthread -O3 -ffast-math -o lupt
 	
 openmp:
-	$(CC) -std=c++11 -march=native pthread_LU.cpp -g -fopenmp -O3 -ftree-vectorizer-verbose=1 -DCACHE_BLOCK_SIZE=$$(cat /proc/cpuinfo | grep cache_alignment | head -1 |sed 's/^.*: //') -o luomp
+	g++ -std=c++11 -march=native openmp_LU.cpp -g -fopenmp -O3 -ffast-math -o luomp
 
-simd: simdtest.cpp
-	$(CC) -std=c++11 -march=native simdtest.cpp -g -fopenmp -o simd
+openmp_b:
+	g++ -std=c++11 -march=native openmp_LU_block.cpp -g -fopenmp -O3 -ffast-math -o lubomp
 
 clean:
-	rm luomp lupt	
+	rm luomp lupt lubomp
 
 
 
